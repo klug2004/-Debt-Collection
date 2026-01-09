@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FedEx SmartRecover | AI Command Center</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Outfit', 'sans-serif'] },
+                    colors: {
+                        brand: { 500: '#4D148C', 600: '#3a0f6b' }, 
+                        accent: { 500: '#FF6600', 600: '#e65c00' } 
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.5); }
+        .dark .glass { background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.1); color: white; }
+        body { transition: background-color 0.3s; }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 h-screen overflow-hidden transition-colors duration-300">
+
+    <div id="app" class="flex w-full h-full relative">
+
+        <div v-if="!isLoggedIn" class="fixed inset-0 z-50 bg-slate-900 flex items-center justify-center bg-[url('https://images.unsplash.com/photo-1610992323861-c884c718a24c?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center">
+            <div class="absolute inset-0 bg-brand-600/90 backdrop-blur-sm"></div>
+            
+            <div class="glass p-10 rounded-3xl w-full max-w-md relative z-10 shadow-2xl text-center">
+                <div class="w-16 h-16 bg-white text-brand-500 rounded-xl flex items-center justify-center text-2xl font-bold mx-auto mb-6 shadow-lg">SR</div>
+                <h1 class="text-3xl font-bold text-white mb-2">SmartRecover</h1>
+                <p class="text-white/80 mb-8">Role-Based Secure Access</p>
+
+                <div class="space-y-4">
+                    <button @click="login('admin')" class="w-full py-4 bg-white text-brand-600 font-bold rounded-xl hover:bg-slate-100 transition shadow-lg flex items-center justify-center gap-3">
+                        <i class="fas fa-user-shield"></i> FedEx Admin (Full Control)
+                    </button>
+                    <button @click="login('agency')" class="w-full py-4 bg-accent-500 text-white font-bold rounded-xl hover:bg-accent-600 transition shadow-lg flex items-center justify-center gap-3">
+                        <i class="fas fa-building"></i> Agency Partner (Restricted)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <template v-if="isLoggedIn">
+            
+            <aside class="w-64 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col z-20">
+                <div class="h-20 flex items-center px-6 border-b border-slate-200 dark:border-slate-800">
+                    <div class="w-10 h-10 bg-brand-500 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg">SR</div>
+                    <div class="ml-3">
+                        <h1 class="font-bold text-lg leading-tight">SmartRecover</h1>
+                        <p class="text-[10px] text-accent-500 font-bold uppercase tracking-wider">{{ userRole === 'admin' ? 'Global Admin' : 'Alpha Collections' }}</p>
+                    </div>
+                </div>
+
+                <nav class="flex-1 py-6 px-3 space-y-2">
+                    <a @click="view='dash'" :class="navClass('dash')" class="flex items-center p-3 rounded-xl cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <i class="fas fa-chart-pie w-6 text-center"></i>
+                        <span class="ml-3 font-medium">Dashboard</span>
+                    </a>
+                    
+                    <a @click="view='cases'" :class="navClass('cases')" class="flex items-center p-3 rounded-xl cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <i class="fas fa-search w-6 text-center"></i>
+                        <span class="ml-3 font-medium">Search & Data</span>
+                    </a>
+
+                    <a v-if="userRole === 'admin'" @click="view='agencies'" :class="navClass('agencies')" class="flex items-center p-3 rounded-xl cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <i class="fas fa-network-wired w-6 text-center"></i>
+                        <span class="ml-3 font-medium">Agency Hub</span>
+                    </a>
+                </nav>
+
+                <div class="p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                    <button @click="toggleTheme" class="w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center justify-center gap-2 text-sm font-medium">
+                        <i :class="isDark ? 'fas fa-sun text-yellow-400' : 'fas fa-moon text-slate-500'"></i>
+                        <span>{{ isDark ? 'Light Mode' : 'Dark Mode' }}</span>
+                    </button>
+                    
+                    <button @click="logout" class="w-full p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-500 hover:bg-red-100 transition flex items-center justify-center gap-2 text-sm font-medium">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
+            </aside>
+
+            <main class="flex-1 flex flex-col h-full relative overflow-hidden bg-slate-50 dark:bg-slate-900">
+                
+                <header class="h-20 px-8 flex items-center justify-between z-10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md sticky top-0">
+                    <div>
+                        <h2 class="text-2xl font-bold">{{ pageTitle }}</h2>
+                        <p class="text-xs text-slate-500">System Status: <span class="text-green-500 font-bold">● Online</span></p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold uppercase shadow-lg">
+                            {{ userRole.substring(0,2) }}
+                        </div>
+                    </div>
+                </header>
+
+                <div class="flex-1 overflow-y-auto p-8 scroll-smooth">
+                    
+                    <div v-show="view === 'dash'" class="space-y-6">
+                        <div class="glass p-6 rounded-2xl border-l-4 border-brand-500 shadow-sm flex justify-between items-center">
+                            <div>
+                                <h3 class="text-lg font-bold">Welcome, {{ userRole === 'admin' ? 'Administrator' : 'Partner Agency' }}</h3>
+                                <p class="text-sm opacity-70">
+                                    {{ userRole === 'admin' ? 'Real-time overview of global debt recovery.' : 'Overview of assigned tasks for Alpha Collections.' }}
+                                </p>
+                            </div>
+                            <button @click="generateDummyData" v-if="userRole==='admin'" class="text-xs bg-brand-500 text-white px-3 py-1 rounded shadow hover:bg-brand-600 transition"><i class="fas fa-sync"></i> Refresh Data</button>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="glass p-6 rounded-2xl shadow-sm h-96 flex flex-col">
+                                <h3 class="font-bold mb-4 flex items-center gap-2"><i class="fas fa-chart-column text-brand-500"></i> Ageing Analysis (Days Overdue)</h3>
+                                <div class="flex-1 relative w-full h-full">
+                                    <canvas id="barChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="glass p-6 rounded-2xl shadow-sm h-96 flex flex-col">
+                                <h3 class="font-bold mb-4 flex items-center gap-2"><i class="fas fa-chart-pie text-accent-500"></i> Risk Segmentation</h3>
+                                <div class="flex-1 relative w-full h-full">
+                                    <canvas id="donutChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="view === 'cases'" class="space-y-4">
+                        
+                        <div class="glass p-4 rounded-xl flex flex-wrap justify-between items-center gap-4 shadow-sm">
+                            <div class="relative flex-1 min-w-[200px]">
+                                <i class="fas fa-search absolute left-3 top-3 text-slate-400"></i>
+                                <input v-model="searchQuery" placeholder="Search Customer Name or ID..." class="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            </div>
+
+                            <div v-if="userRole === 'admin'" class="flex gap-2">
+                                <button @click="triggerFileInput" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-700 transition flex items-center gap-2">
+                                    <i class="fas fa-file-excel"></i> Upload Excel
+                                    <input type="file" ref="fileInput" @change="handleFileUpload" class="hidden" accept=".xlsx,.csv">
+                                </button>
+                                
+                                <button @click="showManualModal=true" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50 transition flex items-center gap-2">
+                                    <i class="fas fa-plus"></i> Manual
+                                </button>
+
+                                <button @click="generateDummyData" class="text-brand-500 px-4 py-2 text-sm font-bold hover:underline border border-slate-200 rounded-lg">
+                                    <i class="fas fa-magic"></i> Auto-Gen
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="glass rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase font-bold text-xs">
+                                    <tr>
+                                        <th class="p-4">Customer</th>
+                                        <th class="p-4">Amount</th>
+                                        <th class="p-4">Days Overdue</th>
+                                        <th class="p-4 w-40">AI Score</th>
+                                        <th class="p-4">Assigned Agency</th>
+                                        <th class="p-4 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-if="filteredCases.length === 0">
+                                        <td colspan="6" class="p-10 text-center opacity-50">
+                                            {{ userRole === 'agency' ? 'No cases assigned to your agency matching search.' : 'No data found. Upload Excel or click Auto-Gen.' }}
+                                        </td>
+                                    </tr>
+                                    <tr v-for="c in filteredCases" :key="c.id" class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                        <td class="p-4 font-bold">
+                                            {{ c.Name }}
+                                            <div class="text-[10px] font-mono opacity-50">{{ c.id }}</div>
+                                        </td>
+                                        <td class="p-4 font-mono">${{ c.Amount.toLocaleString() }}</td>
+                                        
+                                        <td class="p-4">
+                                            <span class="px-2 py-1 rounded text-[10px] font-bold border" :class="daysClass(c.Days)">{{ c.Days }} Days</span>
+                                        </td>
+
+                                        <td class="p-4">
+                                            <div class="w-full">
+                                                <div class="flex justify-between text-[10px] font-bold mb-1">
+                                                    <span>{{ c.score }}</span>
+                                                    <span :class="scoreColorText(c.score)">{{ c.segment }}</span>
+                                                </div>
+                                                <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                    <div class="h-full rounded-full transition-all duration-500" :class="scoreColor(c.score)" :style="{width: c.score+'%'}"></div>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td class="p-4">
+                                            <span class="px-2 py-1 rounded-full text-[10px] font-bold" 
+                                                :class="c.Agency === 'Internal' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'">
+                                                {{ c.Agency }}
+                                            </span>
+                                        </td>
+                                        
+                                        <td class="p-4 text-right">
+                                            <button v-if="c.segment === 'A'" @click="viewRoutine(c)" class="bg-green-50 text-green-600 hover:bg-green-100 text-xs font-bold border border-green-200 px-3 py-1 rounded transition">
+                                                <i class="fas fa-robot mr-1"></i> Routine
+                                            </button>
+                                            
+                                            <button v-if="c.segment === 'B'" class="bg-orange-50 text-orange-600 hover:bg-orange-100 text-xs font-bold border border-orange-200 px-3 py-1 rounded transition">
+                                                <i class="fas fa-user-headset mr-1"></i> Assign
+                                            </button>
+
+                                            <button v-if="c.segment === 'C'" class="bg-red-50 text-red-600 hover:bg-red-100 text-xs font-bold border border-red-200 px-3 py-1 rounded transition">
+                                                <i class="fas fa-gavel mr-1"></i> Legal
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div v-if="view === 'agencies'" class="space-y-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-lg">Agency Performance Tracker</h3>
+                            <input v-model="agencySearch" placeholder="Search Agency Name..." class="p-2 border rounded-lg text-sm w-64 bg-white dark:bg-slate-800 dark:border-slate-700">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div v-for="agency in filteredAgencies" class="glass p-5 rounded-xl border border-slate-200 dark:border-slate-700 hover:shadow-md transition">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg"><i class="fas fa-building text-xl text-slate-500"></i></div>
+                                    <span class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold">{{ agency.status }}</span>
+                                </div>
+                                <h4 class="font-bold text-lg">{{ agency.name }}</h4>
+                                <div class="mt-4 space-y-2 text-sm">
+                                    <div class="flex justify-between"><span class="opacity-70">Active Tasks:</span><span class="font-bold">{{ agency.activeTasks }}</span></div>
+                                    <div class="flex justify-between"><span class="opacity-70">Recovery Rate:</span><span class="font-bold text-brand-500">{{ agency.recoveryRate }}%</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+
+            <div v-if="showManualModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+                <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl w-96 shadow-2xl border dark:border-slate-700">
+                    <h3 class="font-bold text-lg mb-4">Add Single Case</h3>
+                    <div class="space-y-3">
+                        <input v-model="newCase.Name" placeholder="Customer Name" class="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-700">
+                        <input v-model="newCase.Amount" type="number" placeholder="Amount ($)" class="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-700">
+                        <input v-model="newCase.Days" type="number" placeholder="Days Overdue" class="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-700">
+                    </div>
+                    <div class="mt-6 flex gap-2">
+                        <button @click="showManualModal=false" class="flex-1 py-2 text-slate-500 text-sm">Cancel</button>
+                        <button @click="addManualCase" class="flex-1 py-2 bg-brand-500 text-white rounded text-sm font-bold">Add Case</button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="showRoutineModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+                <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl w-full max-w-lg shadow-2xl border dark:border-slate-700">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-bold text-lg">Auto-Mail Routine</h3>
+                        <button @click="showRoutineModal=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="relative pl-8 space-y-8 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                        <div class="relative">
+                            <div class="absolute -left-8 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs border-4 border-white dark:border-slate-900"><i class="fas fa-check"></i></div>
+                            <h4 class="font-bold text-sm">Initial Nudge (Email)</h4>
+                            <p class="text-xs text-slate-500">Sent: 2 days ago</p>
+                        </div>
+                        <div class="relative">
+                            <div class="absolute -left-8 w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs border-4 border-white dark:border-slate-900"><i class="fas fa-spinner fa-spin"></i></div>
+                            <h4 class="font-bold text-sm text-brand-500">Wait Period (Active)</h4>
+                            <p class="text-xs text-slate-500">Ends in 24 hours</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 text-right"><button @click="showRoutineModal=false" class="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-bold">Close</button></div>
+                </div>
+            </div>
+
+        </template>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    isLoggedIn: false,
+                    isDark: false,
+                    userRole: '', 
+                    view: 'dash',
+                    searchQuery: '',
+                    agencySearch: '',
+                    showRoutineModal: false,
+                    showManualModal: false,
+                    newCase: { Name: '', Amount: '', Days: '' },
+                    selectedCase: null,
+                    chart1: null,
+                    chart2: null,
+                    agencies: [
+                        { name: 'Alpha Collections', activeTasks: 12, recoveryRate: 88, status: 'Verified' },
+                        { name: 'Omega Recovery', activeTasks: 45, recoveryRate: 72, status: 'Verified' },
+                        { name: 'Global Debt Sol', activeTasks: 8, recoveryRate: 91, status: 'Top Performer' },
+                        { name: 'FastTrack Agents', activeTasks: 23, recoveryRate: 65, status: 'Under Review' },
+                    ],
+                    cases: []
+                }
+            },
+            watch: {
+                view(newVal) {
+                    if (newVal === 'dash') {
+                        this.$nextTick(() => this.initCharts());
+                    }
+                }
+            },
+            computed: {
+                pageTitle() {
+                    if(this.view === 'dash') return 'Executive Dashboard';
+                    if(this.view === 'cases') return 'Data Manager';
+                    if(this.view === 'agencies') return 'Agency Hub';
+                    return '';
+                },
+                filteredCases() {
+                    let data = this.cases;
+                    if(this.userRole === 'agency') {
+                        data = data.filter(c => c.Agency === 'Alpha Collections');
+                    }
+                    if(this.searchQuery) {
+                        const q = this.searchQuery.toLowerCase();
+                        data = data.filter(c => c.Name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
+                    }
+                    return data;
+                },
+                filteredAgencies() {
+                    if(!this.agencySearch) return this.agencies;
+                    return this.agencies.filter(a => a.name.toLowerCase().includes(this.agencySearch.toLowerCase()));
+                }
+            },
+            methods: {
+                login(role) {
+                    this.userRole = role;
+                    this.isLoggedIn = true;
+                    // Pre-load dummy data if empty so the user sees something immediately
+                    if(this.cases.length === 0) this.generateDummyData();
+                    this.$nextTick(() => { this.initCharts(); });
+                },
+                logout() {
+                    this.isLoggedIn = false;
+                    this.userRole = '';
+                    this.cases = [];
+                    if(this.chart1) this.chart1.destroy();
+                    if(this.chart2) this.chart2.destroy();
+                },
+                toggleTheme() {
+                    this.isDark = !this.isDark;
+                    if(this.isDark) document.documentElement.classList.add('dark');
+                    else document.documentElement.classList.remove('dark');
+                },
+                navClass(v) { return this.view === v ? 'text-accent-500 bg-slate-50 dark:bg-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'; },
+                
+                generateDummyData() {
+                    const names = ['Stark Ind', 'Wayne Ent', 'Acme Corp', 'Globex', 'Umbrella Corp', 'Cyberdyne', 'Massive Dynamic', 'Hooli'];
+                    const agencyOptions = ['Internal', 'Alpha Collections', 'Omega Recovery'];
+                    const newCases = [];
+                    for(let i=0; i<15; i++) {
+                        const assignedAgency = agencyOptions[Math.floor(Math.random() * agencyOptions.length)];
+                        const days = Math.floor(Math.random()*120)+10;
+                        const score = Math.max(0, 100 - (days * 0.8));
+                        const segment = score > 70 ? 'A' : (score > 40 ? 'B' : 'C');
+
+                        newCases.push({
+                            id: `FDX-${1000+this.cases.length+i}`,
+                            Name: names[Math.floor(Math.random()*names.length)],
+                            Amount: Math.floor(Math.random()*50000)+500,
+                            Days: days,
+                            score: Math.floor(score),
+                            Agency: assignedAgency, 
+                            segment: segment,
+                            processed: true
+                        });
+                    }
+                    this.cases = newCases;
+                    if(this.view === 'dash') {
+                        this.$nextTick(() => this.updateCharts());
+                    }
+                },
+                
+                // MANUAL ENTRY LOGIC
+                addManualCase() {
+                    if(!this.newCase.Name) return;
+                    
+                    const days = Number(this.newCase.Days);
+                    const score = Math.max(0, 100 - (days * 0.8));
+                    const segment = score > 70 ? 'A' : (score > 40 ? 'B' : 'C');
+                    const assignedAgency = 'Internal'; // Default for manual
+
+                    this.cases.unshift({
+                        id: `FDX-${Math.floor(Math.random()*9000)+1000}`,
+                        Name: this.newCase.Name,
+                        Amount: Number(this.newCase.Amount),
+                        Days: days,
+                        score: Math.floor(score),
+                        Agency: assignedAgency,
+                        segment: segment,
+                        processed: true
+                    });
+                    this.showManualModal = false;
+                    this.newCase = { Name: '', Amount: '', Days: '' };
+                    
+                    if(this.view === 'dash') this.$nextTick(() => this.updateCharts());
+                },
+                
+                viewRoutine(c) { this.selectedCase = c; this.showRoutineModal = true; },
+                
+                // EXCEL FILE HANDLING (REAL LOGIC)
+                triggerFileInput() {
+                    // Reset value so we can select same file again
+                    if(this.$refs.fileInput) {
+                        this.$refs.fileInput.value = null;
+                        this.$refs.fileInput.click();
+                    }
+                },
+                handleFileUpload(e) {
+                    const file = e.target.files[0];
+                    if(!file) return;
+
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        try {
+                            const wb = XLSX.read(evt.target.result, { type: 'array' });
+                            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                            
+                            // Map loose headers to strict structure
+                            const uploadedCases = data.map((row, i) => {
+                                const days = row['Days'] || row['Overdue'] || 0;
+                                const score = Math.max(0, 100 - (days * 0.8));
+                                const segment = score > 70 ? 'A' : (score > 40 ? 'B' : 'C');
+                                
+                                return {
+                                    id: `FDX-${2000+this.cases.length+i}`,
+                                    Name: row['Name'] || row['Customer'] || 'Unknown',
+                                    Amount: row['Amount'] || 0,
+                                    Days: days,
+                                    score: Math.floor(score),
+                                    Agency: 'Internal', // Default
+                                    segment: segment,
+                                    processed: true
+                                };
+                            });
+
+                            this.cases = [...uploadedCases, ...this.cases];
+                            
+                            if(this.view === 'dash') this.$nextTick(() => this.updateCharts());
+                            alert(`Successfully uploaded ${uploadedCases.length} records!`);
+                        } catch (error) {
+                            console.error(error);
+                            alert("Error parsing Excel file. Ensure columns are Name, Amount, Days.");
+                        }
+                    };
+                    reader.readAsArrayBuffer(file);
+                },
+
+                // STYLING
+                daysClass(d) { return d > 90 ? 'bg-red-100 text-red-600 border-red-200' : (d > 60 ? 'bg-orange-100 text-orange-600 border-orange-200' : 'bg-green-100 text-green-600 border-green-200'); },
+                scoreColor(s) { return s >= 70 ? 'bg-green-500' : (s >= 40 ? 'bg-orange-400' : 'bg-red-500'); },
+                scoreColorText(s) { return s >= 70 ? 'text-green-500' : (s >= 40 ? 'text-orange-400' : 'text-red-500'); },
+
+                // CHARTS LOGIC
+                initCharts() {
+                    const ctx1 = document.getElementById('barChart');
+                    const ctx2 = document.getElementById('donutChart');
+                    
+                    if(!ctx1 || !ctx2) return;
+
+                    if(this.chart1) this.chart1.destroy();
+                    if(this.chart2) this.chart2.destroy();
+
+                    Chart.defaults.font.family = "'Outfit', sans-serif";
+                    Chart.defaults.color = "#94a3b8";
+
+                    this.chart1 = new Chart(ctx1, {
+                        type: 'bar',
+                        data: { labels: ['<30 Days', '30-60 Days', '60-90 Days', '90+ Days'], datasets: [{ label: 'Cases', data: [0,0,0,0], backgroundColor: '#4D148C', borderRadius: 6 }] },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                    });
+
+                    this.chart2 = new Chart(ctx2, {
+                        type: 'doughnut',
+                        data: { labels: ['A (Automated)', 'B (Agency)', 'C (Legal)'], datasets: [{ data: [0,0,0], backgroundColor: ['#22c55e', '#f97316', '#ef4444'], borderWidth: 0 }] },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right' } } }
+                    });
+                    
+                    this.updateCharts();
+                },
+                updateCharts() {
+                    if(!this.chart1 || !this.chart2) return;
+                    
+                    const dataToChart = this.filteredCases;
+                    let d = [0,0,0,0], s = [0,0,0];
+                    
+                    dataToChart.forEach(c => {
+                        if(c.Days<30) d[0]++; else if(c.Days<60) d[1]++; else if(c.Days<90) d[2]++; else d[3]++;
+                        if(c.segment==='A') s[0]++; else if(c.segment==='B') s[1]++; else s[2]++;
+                    });
+
+                    this.chart1.data.datasets[0].data = d;
+                    this.chart1.update();
+                    this.chart2.data.datasets[0].data = s;
+                    this.chart2.update();
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
